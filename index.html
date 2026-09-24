@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Minutes to Moves — meeting notes into a task board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F4F6F9; --sheet:#FFFFFF; --ink:#1B2A41; --muted:#5B6B82; --line:#D6DDE7;
+  --blue:#2F5BD3; --blue-soft:#E7EDFC; --mark:#FFE45C; --mark-ink:#5A4A00;
+  --late:#B83227; --late-soft:#FBE9E7; --done:#237A4B; --done-soft:#E3F3EA;
+  --radius-s:6px; --radius-m:10px;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#10161F; --sheet:#18212D; --ink:#E6ECF4; --muted:#9AA8BB; --line:#2B3747;
+    --blue:#7C9CF0; --blue-soft:#1F2C4A; --mark:#E8CB3A; --mark-ink:#241D00;
+    --late:#F0857A; --late-soft:#3A1F1C; --done:#6FCF97; --done-soft:#17321F;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#10161F; --sheet:#18212D; --ink:#E6ECF4; --muted:#9AA8BB; --line:#2B3747;
+  --blue:#7C9CF0; --blue-soft:#1F2C4A; --mark:#E8CB3A; --mark-ink:#241D00;
+  --late:#F0857A; --late-soft:#3A1F1C; --done:#6FCF97; --done-soft:#17321F;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:inherit}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.5}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 20px 60px}
+
+header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:8px 0 18px;border-bottom:1px solid var(--line)}
+.brand h1{margin:0;font-size:30px;line-height:1.1;font-weight:700;letter-spacing:-.01em}
+.brand h1 .hl{background:linear-gradient(transparent 55%, var(--mark) 55%);padding:0 2px}
+.brand p{margin:6px 0 0;color:var(--muted);max-width:60ch}
+nav.tabs{display:flex;gap:4px;background:var(--sheet);border:1px solid var(--line);border-radius:999px;padding:4px}
+nav.tabs button{border:0;background:transparent;padding:8px 16px;border-radius:999px;font-weight:600;color:var(--muted)}
+nav.tabs button[aria-selected="true"]{background:var(--ink);color:var(--paper)}
+.status-line{font-size:13px;color:var(--muted);margin-top:10px}
+
+section.view{display:none;padding-top:22px}
+section.view.on{display:block}
+
+/* Capture view */
+.capture{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:22px}
+@media (max-width:900px){.capture{grid-template-columns:1fr}}
+.panel{background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius-m);padding:18px}
+.panel h2{margin:0 0 4px;font-size:18px}
+.panel .sub{margin:0 0 14px;color:var(--muted);font-size:14px}
+label.f{display:block;font-size:13px;font-weight:600;margin:12px 0 5px}
+input.t,textarea.t,select.t{width:100%;border:1px solid var(--line);background:var(--paper);border-radius:var(--radius-s);padding:9px 10px}
+textarea.t{min-height:260px;resize:vertical;line-height:1.55}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row > .grow{flex:1 1 160px}
+.btn{border:1px solid var(--line);background:var(--sheet);padding:9px 14px;border-radius:var(--radius-s);font-weight:600}
+.btn.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--late)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.linkish{border:0;background:none;color:var(--blue);padding:0;font-weight:600;text-decoration:underline;text-underline-offset:3px}
+.note{font-size:13px;color:var(--muted)}
+.err{color:var(--late);font-size:14px;margin-top:10px}
+
+/* Review table */
+.review-empty{border:1.5px dashed var(--line);border-radius:var(--radius-m);padding:30px 20px;text-align:center;color:var(--muted)}
+.review-empty strong{display:block;color:var(--ink);font-size:16px;margin-bottom:4px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius-s)}
+table.rv{border-collapse:collapse;width:100%;min-width:640px}
+table.rv th{font-size:12px;font-weight:600;color:var(--muted);text-align:left;padding:8px;border-bottom:1px solid var(--line);background:var(--paper)}
+table.rv td{padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+table.rv tr:last-child td{border-bottom:0}
+table.rv input{width:100%;border:1px solid transparent;background:transparent;border-radius:4px;padding:6px}
+table.rv input:hover,table.rv input:focus{border-color:var(--line);background:var(--paper)}
+table.rv input.missing{background:var(--mark);color:var(--mark-ink)}
+table.rv input.missing::placeholder{color:var(--mark-ink);opacity:.8}
+.src{font-size:12px;color:var(--muted);padding:0 6px 4px;font-style:italic}
+.x{border:0;background:none;color:var(--muted);font-size:18px;line-height:1;padding:4px 8px}
+.flag{display:inline-block;font-size:12px;font-weight:600;background:var(--mark);color:var(--mark-ink);padding:1px 7px;border-radius:4px}
+
+/* Board */
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:16px}
+.toolbar .grp{min-width:170px}
+.counts{margin-left:auto;display:flex;gap:14px;font-size:14px;color:var(--muted)}
+.counts b{color:var(--ink)}
+.counts .late b{color:var(--late)}
+.board{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media (max-width:860px){.board{grid-template-columns:1fr}}
+.col{background:var(--sheet);border:1px solid var(--line);border-radius:var(--radius-m);display:flex;flex-direction:column;min-height:220px}
+.col header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)}
+.col header h3{margin:0;font-size:15px}
+.col header span{font-size:13px;color:var(--muted)}
+.col .list{padding:10px;display:flex;flex-direction:column;gap:8px;flex:1}
+.col.drop .list{background:var(--blue-soft)}
+.col .emptyc{color:var(--muted);font-size:13px;text-align:center;padding:24px 8px}
+.card{background:var(--paper);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:var(--radius-s);padding:10px 10px 8px;cursor:grab}
+.card.review{border-left-color:var(--mark)}
+.card.late{border-left-color:var(--late)}
+.card.isdone{border-left-color:var(--done);opacity:.85}
+.card.isdone .ttl{text-decoration:line-through;text-decoration-color:var(--muted)}
+.card .ttl{font-weight:600;margin:0 0 6px;word-wrap:break-word}
+.card .meta{display:flex;flex-wrap:wrap;gap:6px;font-size:12.5px}
+.chip{background:var(--sheet);border:1px solid var(--line);border-radius:4px;padding:1px 7px}
+.chip.late{background:var(--late-soft);border-color:transparent;color:var(--late);font-weight:600}
+.chip.none{color:var(--muted);font-style:italic}
+.card .acts{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.card .acts .mv{display:flex;gap:4px}
+.card .acts button{border:1px solid var(--line);background:var(--sheet);border-radius:4px;padding:2px 8px;font-size:13px}
+.card .from{font-size:12px;color:var(--muted)}
+
+/* Dialog */
+dialog{border:1px solid var(--line);border-radius:var(--radius-m);background:var(--sheet);color:var(--ink);padding:0;width:min(520px,94vw)}
+dialog::backdrop{background:rgba(15,22,33,.45)}
+dialog form{padding:20px}
+dialog h2{margin:0 0 6px;font-size:18px}
+dialog .foot{display:flex;justify-content:space-between;gap:10px;margin-top:18px;flex-wrap:wrap}
+dialog .quote{font-size:13px;color:var(--muted);border-left:3px solid var(--line);padding-left:10px;margin:10px 0 0;font-style:italic}
+
+.meetings{margin-top:24px}
+.meetings h2{font-size:16px;margin:0 0 8px}
+.mlist{display:flex;flex-direction:column;gap:6px}
+.mitem{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:var(--radius-s);background:var(--sheet)}
+.mitem .n{font-weight:600}
+.mitem .d{font-size:13px;color:var(--muted)}
+@media (prefers-reduced-motion: no-preference){ .card{transition:transform .12s ease} .card:active{transform:scale(.99)} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Minutes to <span class="hl">Moves</span></h1>
+      <p>Paste meeting notes, review the action items AI finds, and track them to done.</p>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button role="tab" id="tab-capture" aria-selected="true" aria-controls="v-capture">Capture notes</button>
+      <button role="tab" id="tab-board" aria-selected="false" aria-controls="v-board">Task board</button>
+    </nav>
+  </header>
+  <div class="status-line" id="storeStatus">Connecting storage…</div>
+
+  <!-- CAPTURE -->
+  <section class="view on" id="v-capture" role="tabpanel" aria-labelledby="tab-capture">
+    <div class="capture">
+      <div class="panel">
+        <h2>Meeting notes</h2>
+        <p class="sub">Paste raw notes or minutes. Names and dates are picked up where they are written.</p>
+        <div class="row">
+          <div class="grow"><label class="f" for="mTitle">Meeting name</label><input class="t" id="mTitle" placeholder="e.g. Weekly ops sync"></div>
+          <div style="flex:0 0 170px"><label class="f" for="mDate">Meeting date</label><input class="t" id="mDate" type="date"></div>
+        </div>
+        <label class="f" for="mNotes">Notes</label>
+        <textarea class="t" id="mNotes" placeholder="Paste your meeting notes here…"></textarea>
+        <div class="row" style="margin-top:12px;justify-content:space-between">
+          <button class="linkish" id="loadSample" type="button">Use sample notes</button>
+          <div class="row">
+            <button class="btn" id="stopBtn" type="button" hidden>Stop</button>
+            <button class="btn primary" id="extractBtn" type="button">Extract action items</button>
+          </div>
+        </div>
+        <div class="err" id="extractErr" role="alert"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Review before saving</h2>
+        <p class="sub">Highlighted cells are missing or were inferred. Check them, then add the items to the board.</p>
+        <div id="reviewArea">
+          <div class="review-empty"><strong>No items yet</strong>Extract from notes, or add an item yourself.</div>
+        </div>
+        <div class="row" style="margin-top:12px;justify-content:space-between">
+          <button class="btn ghost" id="addRow" type="button">Add item manually</button>
+          <button class="btn primary" id="saveBoard" type="button" disabled>Add items to board</button>
+        </div>
+        <div class="err" id="saveErr" role="alert"></div>
+      </div>
+    </div>
+
+    <div class="meetings">
+      <h2>Saved meetings</h2>
+      <div class="mlist" id="mlist"><div class="note">No meetings saved yet.</div></div>
+    </div>
+  </section>
+
+  <!-- BOARD -->
+  <section class="view" id="v-board" role="tabpanel" aria-labelledby="tab-board">
+    <div class="toolbar">
+      <div class="grp"><label class="f" for="fMeeting">Meeting</label><select class="t" id="fMeeting"><option value="">All meetings</option></select></div>
+      <div class="grp"><label class="f" for="fOwner">Owner</label><select class="t" id="fOwner"><option value="">Everyone</option></select></div>
+      <div class="counts" id="counts"></div>
+    </div>
+    <div class="board" id="board"></div>
+  </section>
+</div>
+
+<dialog id="edit">
+  <form method="dialog" id="editForm">
+    <h2>Edit action item</h2>
+    <label class="f" for="eTitle">Action</label><input class="t" id="eTitle" required>
+    <div class="row">
+      <div class="grow"><label class="f" for="eOwner">Owner</label><input class="t" id="eOwner" placeholder="Unassigned"></div>
+      <div class="grow"><label class="f" for="eDeadline">Deadline</label><input class="t" id="eDeadline" type="date"></div>
+    </div>
+    <label class="f" for="eStatus">Status</label>
+    <select class="t" id="eStatus"><option value="todo">To do</option><option value="doing">In progress</option><option value="done">Done</option></select>
+    <p class="quote" id="eQuote" hidden></p>
+    <div class="foot">
+      <button class="btn danger" id="eDelete" type="button">Delete item</button>
+      <div class="row"><button class="btn" value="cancel" type="button" id="eCancel">Cancel</button><button class="btn primary" id="eSave" type="submit">Save changes</button></div>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(function(){
+"use strict";
+const $ = s => document.querySelector(s);
+const STATUSES = [["todo","To do"],["doing","In progress"],["done","Done"]];
+const SAMPLE = `Weekly ops sync — attendees: Sara (ops lead), Omar, Priya, Daniel
+
+1. Venue for the client workshop still not confirmed. Omar to call the two shortlisted hotels and confirm one by Thursday.
+2. Priya will update the onboarding slides with the new safety video before 15 October.
+3. Invoice backlog: Daniel to send the overdue reminders to the three clients this week.
+4. Someone needs to check whether the projector in room B has been repaired.
+5. Sara to share the revised shift roster with the whole team by end of month.
+6. Agreed to review the supplier contract renewal at next meeting, owner TBC.`;
+
+// ---------- state ----------
+let meetings = [];   // {id,title,date,notes,createdAt}
+let tasks = [];      // {id,meetingId,title,owner,deadline,status,needsReview,source,createdAt}
+let draft = [];      // review rows
+let draftMeta = null;
+let db = null, sample = null, ctl = null;
+let editingId = null;
+
+// ---------- storage: db capability, else browser-only ----------
+const LS = "m2m-v1";
+function lsLoad(){ try{ const o = JSON.parse(localStorage.getItem(LS)||"{}"); meetings=o.meetings||[]; tasks=o.tasks||[]; }catch(e){} }
+function lsSave(){ try{ localStorage.setItem(LS, JSON.stringify({meetings,tasks})); }catch(e){} }
+const store = {
+  async putMeeting(m){ if(db){ const {id,...b}=m; await db.collection("meetings").doc(id).set(b); } else { meetings.push(m); lsSave(); renderAll(); } },
+  async putTask(t){ if(db){ const {id,...b}=t; await db.collection("tasks").doc(id).set(b); } else { const i=tasks.findIndex(x=>x.id===t.id); if(i>=0) tasks[i]=t; else tasks.push(t); lsSave(); renderAll(); } },
+  async patchTask(id,p){ if(db){ await db.collection("tasks").doc(id).update(p); } else { const t=tasks.find(x=>x.id===id); if(t) Object.assign(t,p); lsSave(); renderAll(); } },
+  async delTask(id){ if(db){ await db.collection("tasks").doc(id).delete(); } else { tasks=tasks.filter(x=>x.id!==id); lsSave(); renderAll(); } },
+  async delMeeting(id){
+    const ids = tasks.filter(t=>t.meetingId===id).map(t=>t.id);
+    if(db){ for(const tid of ids) await db.collection("tasks").doc(tid).delete(); await db.collection("meetings").doc(id).delete(); }
+    else { tasks=tasks.filter(t=>t.meetingId!==id); meetings=meetings.filter(m=>m.id!==id); lsSave(); renderAll(); }
+  }
+};
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now())+Math.random().toString(16).slice(2)).replace(/[^A-Za-z0-9-]/g,"");
+
+function setStatus(t){ $("#storeStatus").textContent = t; }
+
+// ---------- dates ----------
+function todayISO(){ const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); }
+function isLate(t){ return t.deadline && t.status!=="done" && t.deadline < todayISO(); }
+function fmtDate(iso){ if(!iso) return ""; const [y,m,d]=iso.split("-").map(Number); return new Date(y,m-1,d).toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"}); }
+
+// ---------- tabs ----------
+function showTab(which){
+  const cap = which==="capture";
+  $("#tab-capture").setAttribute("aria-selected",cap); $("#tab-board").setAttribute("aria-selected",!cap);
+  $("#v-capture").classList.toggle("on",cap); $("#v-board").classList.toggle("on",!cap);
+}
+$("#tab-capture").onclick=()=>showTab("capture");
+$("#tab-board").onclick=()=>showTab("board");
+
+// ---------- extraction ----------
+$("#mDate").value = todayISO();
+$("#loadSample").onclick = () => { $("#mTitle").value="Weekly ops sync"; $("#mNotes").value=SAMPLE; };
+
+function buildPrompt(notes, meetingDate){
+  return `You extract action items from meeting notes.
+Meeting date: ${meetingDate} (use it to resolve relative dates such as "Thursday", "this week", "end of month").
+
+Rules:
+- One item per distinct action someone must do. Skip pure discussion or decisions with no action.
+- "title": a short imperative action (max 12 words).
+- "owner": the person or role named as responsible, exactly as written. null if nobody is named or it says "someone"/"TBC".
+- "deadline": YYYY-MM-DD only if a date or timeframe is stated; null otherwise. Never invent a deadline.
+- "deadline_inferred": true if you converted a relative phrase ("by Thursday", "this week", "end of month") into a date; false if the exact date was written; false when deadline is null.
+- "source": the shortest phrase from the notes that supports the item (max 20 words).
+
+Reply with ONLY a JSON array, no other text. Example:
+[{"title":"Confirm venue with shortlisted hotels","owner":"Omar","deadline":"2026-10-01","deadline_inferred":true,"source":"Omar to call the two shortlisted hotels and confirm one by Thursday"}]
+
+Meeting notes:
+"""
+${notes}
+"""`;
+}
+
+function copyForError(code){
+  switch(code){
+    case "not_granted": return "AI extraction needs your permission. Allow it when asked, or add items manually.";
+    case "rate_limited": return "Too many requests right now. Wait a minute, then extract again.";
+    case "cancelled": return "";
+    default: return "Extraction failed. Your notes are unchanged; try again or add items manually.";
+  }
+}
+
+$("#extractBtn").onclick = async () => {
+  const notes = $("#mNotes").value.trim();
+  $("#extractErr").textContent="";
+  if(!notes){ $("#extractErr").textContent="Paste the meeting notes first."; return; }
+  if(!sample){ $("#extractErr").textContent="AI extraction isn't available in this view. Add items manually on the right."; return; }
+  const btn=$("#extractBtn"); btn.disabled=true; btn.textContent="Reading notes…"; $("#stopBtn").hidden=false;
+  ctl = new AbortController();
+  try{
+    const out = await sample.json(buildPrompt(notes, $("#mDate").value || todayISO()), {signal:ctl.signal, modelTier:"default"});
+    const arr = Array.isArray(out) ? out : (out && Array.isArray(out.items) ? out.items : []);
+    if(!arr.length){ $("#extractErr").textContent="No action items found in these notes. Add them manually if needed."; }
+    draft = arr.map(x=>({
+      key:uid(),
+      title:String(x.title||"").trim(),
+      owner: x.owner ? String(x.owner).trim() : "",
+      deadline: (typeof x.deadline==="string" && /^\d{4}-\d{2}-\d{2}$/.test(x.deadline)) ? x.deadline : "",
+      inferred: !!x.deadline_inferred,
+      source: x.source ? String(x.source) : ""
+    })).filter(r=>r.title);
+    draftMeta = null;
+    renderReview();
+  }catch(e){
+    $("#extractErr").textContent = copyForError(e && e.code);
+  }finally{
+    btn.disabled=false; btn.textContent="Extract action items"; $("#stopBtn").hidden=true; ctl=null;
+  }
+};
+$("#stopBtn").onclick = () => ctl && ctl.abort();
+
+// ---------- review table ----------
+function rowNeedsReview(r){ return !r.owner || !r.deadline || r.inferred; }
+function renderReview(){
+  const area=$("#reviewArea");
+  $("#saveBoard").disabled = !draft.length;
+  if(!draft.length){ area.innerHTML='<div class="review-empty"><strong>No items yet</strong>Extract from notes, or add an item yourself.</div>'; return; }
+  const flagged = draft.filter(rowNeedsReview).length;
+  area.innerHTML = `<p class="note" style="margin:0 0 8px">${draft.length} item${draft.length>1?"s":""} found${flagged?`, <span class="flag">${flagged} to check</span>`:""}</p>
+  <div class="tablewrap"><table class="rv"><thead><tr><th style="width:46%">Action</th><th style="width:22%">Owner</th><th style="width:24%">Deadline</th><th></th></tr></thead><tbody></tbody></table></div>`;
+  const tb=area.querySelector("tbody");
+  draft.forEach(r=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td><input data-k="title" aria-label="Action"><div class="src"></div></td>
+      <td><input data-k="owner" aria-label="Owner" placeholder="Who?"></td>
+      <td><input data-k="deadline" type="date" aria-label="Deadline"><div class="src dl"></div></td>
+      <td><button class="x" type="button" aria-label="Remove item">×</button></td>`;
+    const [ti,ow,dl]=tr.querySelectorAll("input");
+    ti.value=r.title; ow.value=r.owner; dl.value=r.deadline;
+    tr.querySelector(".src").textContent = r.source ? `“${r.source}”` : "";
+    const mark=()=>{ ow.classList.toggle("missing",!r.owner); dl.classList.toggle("missing",!r.deadline||r.inferred);
+      tr.querySelector(".dl").textContent = !r.deadline ? "No deadline stated" : (r.inferred ? "Worked out from the notes — confirm" : ""); };
+    ti.oninput=()=>{r.title=ti.value;};
+    ow.oninput=()=>{r.owner=ow.value.trim(); mark();};
+    dl.oninput=()=>{r.deadline=dl.value; r.inferred=false; mark();};
+    tr.querySelector(".x").onclick=()=>{ draft=draft.filter(x=>x!==r); renderReview(); };
+    mark();
+    tb.appendChild(tr);
+  });
+}
+$("#addRow").onclick=()=>{ draft.push({key:uid(),title:"",owner:"",deadline:"",inferred:false,source:""}); renderReview();
+  const inputs=document.querySelectorAll('#reviewArea input[data-k="title"]'); inputs[inputs.length-1]?.focus(); };
+
+$("#saveBoard").onclick = async () => {
+  $("#saveErr").textContent="";
+  const rows = draft.filter(r=>r.title.trim());
+  if(!rows.length){ $("#saveErr").textContent="Give each item an action before adding it."; return; }
+  const btn=$("#saveBoard"); btn.disabled=true; btn.textContent="Adding…";
+  try{
+    const m = { id:uid(), title:$("#mTitle").value.trim()||"Untitled meeting", date:$("#mDate").value||todayISO(), notes:$("#mNotes").value, createdAt:Date.now() };
+    await store.putMeeting(m);
+    for(const r of rows){
+      await store.putTask({ id:uid(), meetingId:m.id, title:r.title.trim(), owner:r.owner, deadline:r.deadline, status:"todo",
+        needsReview: rowNeedsReview(r), source:r.source, createdAt:Date.now() });
+    }
+    draft=[]; renderReview();
+    $("#mNotes").value=""; $("#mTitle").value="";
+    $("#fMeeting").value=""; showTab("board");
+  }catch(e){
+    $("#saveErr").textContent = e && e.code==="quota_exceeded" ? "Storage is full. Delete old meetings, then try again." : "Couldn't save the items. Try again.";
+  }finally{ btn.textContent="Add items to board"; btn.disabled=!draft.length; }
+};
+
+// ---------- board ----------
+function renderFilters(){
+  const fm=$("#fMeeting"), fo=$("#fOwner"); const vm=fm.value, vo=fo.value;
+  fm.innerHTML='<option value="">All meetings</option>';
+  [...meetings].sort((a,b)=>(b.date||"").localeCompare(a.date||"")).forEach(m=>{ const o=document.createElement("option"); o.value=m.id; o.textContent=`${m.title} (${fmtDate(m.date)})`; fm.appendChild(o); });
+  fm.value = meetings.some(m=>m.id===vm) ? vm : "";
+  const owners=[...new Set(tasks.map(t=>t.owner||""))].sort();
+  fo.innerHTML='<option value="">Everyone</option>';
+  owners.forEach(n=>{ const o=document.createElement("option"); o.value=n||"__none"; o.textContent=n||"Unassigned"; fo.appendChild(o); });
+  fo.value = [...fo.options].some(o=>o.value===vo) ? vo : "";
+}
+function visibleTasks(){
+  const fm=$("#fMeeting").value, fo=$("#fOwner").value;
+  return tasks.filter(t=> (!fm||t.meetingId===fm) && (!fo || (fo==="__none" ? !t.owner : t.owner===fo)));
+}
+function renderBoard(){
+  const vis=visibleTasks(), board=$("#board"); board.innerHTML="";
+  const late=vis.filter(isLate).length, rev=vis.filter(t=>t.needsReview&&t.status!=="done").length;
+  $("#counts").innerHTML = `<span><b>${vis.length}</b> items</span><span class="late"><b>${late}</b> overdue</span><span><b>${rev}</b> to check</span>`;
+  const mById=Object.fromEntries(meetings.map(m=>[m.id,m]));
+  STATUSES.forEach(([key,label],si)=>{
+    const col=document.createElement("div"); col.className="col"; col.dataset.status=key;
+    const items=vis.filter(t=>t.status===key).sort((a,b)=>(a.deadline||"9999").localeCompare(b.deadline||"9999"));
+    col.innerHTML=`<header><h3>${label}</h3><span>${items.length}</span></header><div class="list"></div>`;
+    const list=col.querySelector(".list");
+    if(!items.length) list.innerHTML=`<div class="emptyc">${key==="todo"?"Nothing waiting. Capture notes to add items.":key==="doing"?"Move an item here when work starts.":"Finished items land here."}</div>`;
+    items.forEach(t=>{
+      const c=document.createElement("article"); c.className="card"+(t.status==="done"?" isdone":isLate(t)?" late":t.needsReview?" review":"");
+      c.draggable=true; c.tabIndex=0; c.dataset.id=t.id;
+      const m=mById[t.meetingId];
+      c.innerHTML=`<p class="ttl"></p><div class="meta"></div><div class="acts"><span class="from"></span><span class="mv"></span></div>`;
+      c.querySelector(".ttl").textContent=t.title;
+      const meta=c.querySelector(".meta");
+      const own=document.createElement("span"); own.className="chip"+(t.owner?"":" none"); own.textContent=t.owner||"Unassigned"; meta.appendChild(own);
+      const dl=document.createElement("span"); dl.className="chip"+(isLate(t)?" late":t.deadline?"":" none"); dl.textContent=t.deadline?(isLate(t)?"Overdue · ":"Due ")+fmtDate(t.deadline):"No deadline"; meta.appendChild(dl);
+      if(t.needsReview && t.status!=="done"){ const f=document.createElement("span"); f.className="flag"; f.textContent="Check"; meta.appendChild(f); }
+      c.querySelector(".from").textContent = m ? m.title : "";
+      const mv=c.querySelector(".mv");
+      if(si>0){ const b=document.createElement("button"); b.type="button"; b.textContent="‹"; b.setAttribute("aria-label","Move to "+STATUSES[si-1][1]); b.onclick=e=>{e.stopPropagation(); move(t.id,STATUSES[si-1][0]);}; mv.appendChild(b); }
+      if(si<2){ const b=document.createElement("button"); b.type="button"; b.textContent="›"; b.setAttribute("aria-label","Move to "+STATUSES[si+1][1]); b.onclick=e=>{e.stopPropagation(); move(t.id,STATUSES[si+1][0]);}; mv.appendChild(b); }
+      c.onclick=()=>openEdit(t.id);
+      c.onkeydown=e=>{ if(e.key==="Enter") openEdit(t.id); };
+      c.ondragstart=e=>{ e.dataTransfer.setData("text/plain",t.id); };
+      list.appendChild(c);
+    });
+    col.ondragover=e=>{ e.preventDefault(); col.classList.add("drop"); };
+    col.ondragleave=()=>col.classList.remove("drop");
+    col.ondrop=e=>{ e.preventDefault(); col.classList.remove("drop"); const id=e.dataTransfer.getData("text/plain"); if(id) move(id,key); };
+    board.appendChild(col);
+  });
+}
+async function move(id,status){
+  const t=tasks.find(x=>x.id===id); if(!t||t.status===status) return;
+  try{ await store.patchTask(id,{status}); }catch(e){ setStatus("Couldn't move that item. Try again."); }
+}
+$("#fMeeting").onchange=renderBoard; $("#fOwner").onchange=renderBoard;
+
+// ---------- edit dialog ----------
+function openEdit(id){
+  const t=tasks.find(x=>x.id===id); if(!t) return; editingId=id;
+  $("#eTitle").value=t.title; $("#eOwner").value=t.owner||""; $("#eDeadline").value=t.deadline||""; $("#eStatus").value=t.status;
+  const q=$("#eQuote"); q.hidden=!t.source; q.textContent=t.source?`From the notes: “${t.source}”`:"";
+  $("#edit").showModal();
+}
+$("#eCancel").onclick=()=>$("#edit").close();
+$("#editForm").onsubmit=async e=>{
+  e.preventDefault(); if(!editingId) return;
+  const title=$("#eTitle").value.trim(); if(!title) return;
+  const owner=$("#eOwner").value.trim(), deadline=$("#eDeadline").value;
+  try{ await store.patchTask(editingId,{title,owner,deadline,status:$("#eStatus").value,needsReview:!(owner&&deadline)}); $("#edit").close(); }
+  catch(err){ setStatus("Couldn't save changes. Try again."); }
+};
+$("#eDelete").onclick=async()=>{
+  if(!editingId) return; if(!confirm("Delete this action item?")) return;
+  try{ await store.delTask(editingId); $("#edit").close(); }catch(e){ setStatus("Couldn't delete the item. Try again."); }
+};
+
+// ---------- meetings list ----------
+function renderMeetings(){
+  const el=$("#mlist");
+  if(!meetings.length){ el.innerHTML='<div class="note">No meetings saved yet.</div>'; return; }
+  el.innerHTML="";
+  [...meetings].sort((a,b)=>(b.date||"").localeCompare(a.date||"")).forEach(m=>{
+    const n=tasks.filter(t=>t.meetingId===m.id), open=n.filter(t=>t.status!=="done").length;
+    const d=document.createElement("div"); d.className="mitem";
+    d.innerHTML=`<div><div class="n"></div><div class="d"></div></div><div class="row"><button class="btn ghost" type="button">View on board</button><button class="btn ghost danger" type="button">Delete</button></div>`;
+    d.querySelector(".n").textContent=m.title;
+    d.querySelector(".d").textContent=`${fmtDate(m.date)} — ${n.length} item${n.length===1?"":"s"}, ${open} open`;
+    const [v,del]=d.querySelectorAll("button");
+    v.onclick=()=>{ renderFilters(); $("#fMeeting").value=m.id; renderBoard(); showTab("board"); };
+    del.onclick=async()=>{ if(!confirm(`Delete "${m.title}" and its ${n.length} item(s)?`)) return; try{ await store.delMeeting(m.id); }catch(e){ setStatus("Couldn't delete the meeting. Try again."); } };
+    el.appendChild(d);
+  });
+}
+
+function renderAll(){ renderFilters(); renderBoard(); renderMeetings(); }
+
+// ---------- boot ----------
+lsLoad(); renderReview(); renderAll();
+setStatus("Saved in this browser only.");
+if(window.claude && typeof window.claude.use==="function"){
+  window.claude.use("sample").then(s=>{ sample=s; if(!s) $("#extractErr").textContent=""; }).catch(()=>{});
+  window.claude.use("db").then(d=>{
+    if(!d){ return; }
+    db=d; setStatus("Saved to this board's shared storage.");
+    let gotM=false, gotT=false;
+    const done=()=>{ if(gotM&&gotT) renderAll(); };
+    db.collection("meetings").onSnapshot(s=>{ meetings=s.docs.map(x=>({id:x.id,...x.data()})); gotM=true; done(); },
+      e=>{ if(e.code==="revoked"){ setStatus("Storage is no longer available in this view."); } });
+    db.collection("tasks").onSnapshot(s=>{ tasks=s.docs.map(x=>({id:x.id,...x.data()})); gotT=true; done(); },
+      e=>{ if(e.code==="revoked"){ setStatus("Storage is no longer available in this view."); } });
+  }).catch(()=>{});
+}
+})();
+</script>
+</body>
+</html>
